@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ميزان زاوية حبال المصعد - النسخة الاحترافية</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #camera-container { position: relative; width: 100vw; height: 100vh; }
+        video { width: 100%; height: 100%; object-fit: cover; position: absolute; }
+        canvas { position: absolute; top: 0; left: 0; z-index: 10; pointer-events: none; }
+        .ui-panel { position: absolute; bottom: 0; width: 100%; z-index: 20; background: rgba(0,0,0,0.7); padding: 15px 0; text-align: center; color: white; }
+        .btn-capture { width: 70px; height: 70px; border-radius: 50%; border: 4px solid white; background: #e74c3c; cursor: pointer; }
+        .error-msg { position: absolute; top: 20%; width: 100%; color: #ff3b30; text-align: center; z-index: 30; display: none; padding: 20px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+<div id="camera-container">
+    <div id="errorMessage" class="error-msg">يجب استخدام رابط HTTPS لتشغيل الكاميرا أو قبول إذن الوصول.</div>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
+    
+    <div class="ui-panel">
+        <div style="margin-bottom: 10px; font-size: 14px;">الخط الأحمر يحدد زاوية 150° من نقطة الدخول الرأسية</div>
+        <button class="btn-capture" onclick="takeSnapshot()"></button>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const errorDiv = document.getElementById('errorMessage');
+
+    async function setupCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", width: 1280, height: 720 }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            errorDiv.style.display = "block";
+            console.error(err);
+        }
+    }
+
+    function draw() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const cX = canvas.width / 2;
+        const cY = canvas.height / 2;
+        const r = Math.min(cX, cY) * 0.7;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. المحاور الأساسية
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(cX - r, cY); ctx.lineTo(cX + r, cY); // أفقي
+        ctx.moveTo(cX, cY - r); ctx.lineTo(cX, cY + r); // رأسي
+        ctx.stroke();
+
+        // 2. دائرة الطارة
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cX, cY, r, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // 3. تحديد زاوية 150 درجة (الالتفاف)
+        // إذا بدأنا من الصفر (يسار - 180 درجة) وانتهينا عند زاوية 150 درجة التفات
+        // الزاوية الرياضية ستكون -30 درجة من الأفق اليميني
+        const startAngle = Math.PI; // 180 درجة (يسار)
+        const angle150 = startAngle + (150 * Math.PI / 180); 
+        
+        const targetX = cX + r * Math.cos(angle150);
+        const targetY = cY + r * Math.sin(angle150);
+
+        ctx.strokeStyle = '#ff3b30';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(cX, cY);
+        ctx.lineTo(targetX, targetY);
+        ctx.stroke();
+
+        // علامة المركز
+        ctx.fillStyle = '#ff3b30';
+        ctx.beginPath(); ctx.arc(cX, cY, 6, 0, 2*Math.PI); ctx.fill();
+
+        requestAnimationFrame(draw);
+    }
+
+    function takeSnapshot() {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        const tCtx = tempCanvas.getContext('2d');
+
+        tCtx.drawImage(video, 0, 0);
+        
+        // رسم العلامات على الصورة المحفوظة
+        const ratio = tempCanvas.width / canvas.width;
+        const cX = tempCanvas.width / 2;
+        const cY = tempCanvas.height / 2;
+        const r = (Math.min(canvas.width / 2, canvas.height / 2) * 0.7) * ratio;
+
+        tCtx.strokeStyle = '#ff3b30'; tCtx.lineWidth = 8;
+        const ang = Math.PI + (150 * Math.PI / 180);
+        tCtx.beginPath(); tCtx.moveTo(cX, cY);
+        tCtx.lineTo(cX + r * Math.cos(ang), cY + r * Math.sin(ang));
+        tCtx.stroke();
+
+        const link = document.createElement('a');
+        link.download = `Elevator_Angle_Report.png`;
+        link.href = tempCanvas.toDataURL();
+        link.click();
+    }
+
+    setupCamera().then(draw);
+</script>
+</body>
+</html>
